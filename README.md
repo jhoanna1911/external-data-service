@@ -54,7 +54,7 @@ Cada módulo sigue el patrón **controller → service → entity** con rutas pr
 ### 1. Clonar e instalar
 
 ```bash
-git clone <url-del-repo>
+git clone https://github.com/jhoanna1911/external-data-service
 cd prueba-tecnica-backend
 npm install
 cp .env.example .env

@@ -6,9 +6,12 @@ import { Post } from "../modules/external/post.entity";
 
 dotenv.config();
 
+const dbHost = process.env.DB_HOST || "localhost";
+const useSsl = dbHost !== "localhost";
+
 export const AppDataSource = new DataSource({
   type: "postgres",
-  host: process.env.DB_HOST || "localhost",
+  host: dbHost,
   port: Number(process.env.DB_PORT) || 5432,
   username: process.env.DB_USERNAME || "postgres",
   password: process.env.DB_PASSWORD || "postgres",
@@ -16,4 +19,5 @@ export const AppDataSource = new DataSource({
   synchronize: true,
   logging: false,
   entities: [User, Post],
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
