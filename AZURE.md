@@ -1,143 +1,87 @@
 # Despliegue en Azure
 
-Estrategia para desplegar esta API en Azure cumpliendo los requisitos de la prueba.
-
-## Arquitectura
+## URL pública
 
 ```
-       ┌────────────────────────┐        ┌─────────────────────────────┐
-GitHub ─▶  GitHub Actions (CI)   ├──────▶ │ Azure App Service (Node 20) │
-       │  - build + test         │        │  - variables de entorno     │
-       └────────────────────────┘        │  - URL pública HTTPS         │
-                                          └──────────────┬──────────────┘
-                                                         │
-                         ┌───────────────────────────────┼──────────────────────┐
-                         ▼                                                       ▼
-         ┌──────────────────────────────────┐         ┌──────────────────────────────────┐
-         │ Azure DB for PostgreSQL Flexible │         │ Azure Storage Account (Blob)     │
-         │  - TLS, firewall                 │         │  - Container privado             │
-         │  - `prueba_tecnica` DB           │         │  - Acceso por SAS token firmado  │
-         └──────────────────────────────────┘         └──────────────────────────────────┘
+https://external-data-service-jh-faamgqaheudje0h6.canadacentral-01.azurewebsites.net
 ```
 
-## 1. Recursos a crear
+## 1. Azure App Service
 
-| Recurso                              | Propósito                                                           |
-|--------------------------------------|---------------------------------------------------------------------|
-| Resource Group `rg-prueba-tecnica`   | Agrupa todos los recursos                                           |
-| App Service Plan (Linux, B1)         | Cómputo para la API                                                 |
-| **Azure App Service** (Node 20 LTS)  | Runtime de la API. URL pública `https://<app>.azurewebsites.net`    |
-| **Azure DB for PostgreSQL Flexible** | Base de datos gestionada                                            |
-| **Azure Storage Account** + container| Carga/descarga de archivos vía SAS                                  |
-| (Opcional) App Insights              | Observabilidad / logs                                               |
+- Web App Linux, runtime **Node 20 LTS**, plan B1, región Canada Central.
+- El comando de arranque es `npm start` (definido en [package.json](package.json)),
+  que ejecuta `node dist/server.js`.
+- Azure inyecta la variable `PORT`; Express la usa con `process.env.PORT`.
 
-## 2. App Service — configuración
+## 2. Variables de entorno
 
-En el portal → **App Service → Configuration → Application settings** definir:
+Definidas en **App Service → Settings → Environment variables → Application settings**:
 
-| Setting             | Valor                                                          |
-|---------------------|----------------------------------------------------------------|
-| `NODE_ENV`          | `production`                                                   |
-| `PORT`              | `8080` (Azure inyecta `PORT`; Express ya lo usa)               |
-| `DB_HOST`           | `<servidor>.postgres.database.azure.com`                       |
-| `DB_PORT`           | `5432`                                                         |
-| `DB_USERNAME`       | usuario administrador del flexible server                      |
-| `DB_PASSWORD`       | **(secret)**                                                   |
-| `DB_NAME`           | `prueba_tecnica`                                               |
-| `JWT_SECRET`        | **(secret)** cadena aleatoria larga                            |
-| `JWT_EXPIRES_IN`    | `1d`                                                           |
-| `EXTERNAL_API_URL`  | `https://jsonplaceholder.typicode.com`                         |
-| `AZURE_STORAGE_ACCOUNT` | nombre de la cuenta de storage                             |
-| `AZURE_STORAGE_KEY` | **(secret)** access key                                        |
-| `AZURE_STORAGE_CONTAINER` | nombre del container (ej. `uploads`)                     |
+| Setting                  | Valor                                                |
+|--------------------------|------------------------------------------------------|
+| `NODE_ENV`               | `production`                                         |
+| `NPM_CONFIG_PRODUCTION`  | `false`                                              |
+| `DB_HOST`                | host de Postgres                                     |
+| `DB_PORT`                | `5432`                                               |
+| `DB_USERNAME`            | usuario                                              |
+| `DB_PASSWORD`            | *(secret)*                                           |
+| `DB_NAME`                | nombre de la base                                    |
+| `JWT_SECRET`             | *(secret)*                                           |
+| `JWT_EXPIRES_IN`         | `1d`                                                 |
+| `EXTERNAL_API_URL`       | `https://jsonplaceholder.typicode.com`               |
 
-Para mayor seguridad, guardar los secretos en **Azure Key Vault** y referenciarlos
-desde App Service con `@Microsoft.KeyVault(SecretUri=...)`.
-
-### Startup command
-
-App Service corre `npm start` por defecto, que ya apunta a `node dist/server.js`
-según el [package.json](package.json). Asegúrate de que el build (`npm run build`)
-se ejecute durante el deploy (el workflow de abajo lo hace).
+Los secretos pueden guardarse en **Azure Key Vault** y referenciarse desde
+Application settings con `@Microsoft.KeyVault(SecretUri=...)`.
 
 ## 3. Despliegue desde GitHub
 
-### Opción A — Deployment Center (sin escribir YAML)
+Configurado desde **App Service → Deployment Center**:
 
-1. App Service → **Deployment Center** → Source: **GitHub**.
-2. Autorizar, escoger `repo/branch = main`.
-3. Build provider: **GitHub Actions** → Azure lo genera automáticamente.
-4. Cada push a `main` despliega.
+- Source: **GitHub**
+- Repo / branch: `jhoanna1911/external-data-service` / `main`
+- Build provider: **GitHub Actions**
 
-### Opción B — Workflow propio (recomendado)
+Azure genera el workflow en `.github/workflows/` y añade el secret de
+autenticación al repo. Cada push a `main` dispara build y deploy.
 
-Crear `.github/workflows/azure.yml`:
+## 4. URL pública
 
-```yaml
-name: Deploy to Azure App Service
+La app queda accesible por HTTPS en la URL indicada arriba.
+Probar:
 
-on:
-  push:
-    branches: [main]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - run: npm prune --omit=dev
-
-      - uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ secrets.AZURE_APP_NAME }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
-          package: .
+```
+GET  /                  → health check
+GET  /external-data     → posts transformados
+POST /auth/register     → crea usuario
+POST /auth/login        → devuelve JWT
+POST /external-data/sync  (JWT)
+GET  /external-data/stored (JWT)
 ```
 
-Secrets en GitHub:
+## 5. Carga de archivos a Azure Storage con SAS
 
-- `AZURE_APP_NAME` — nombre del App Service.
-- `AZURE_PUBLISH_PROFILE` — contenido del XML descargado desde
-  *App Service → Get publish profile*.
+**Pattern:** el cliente sube los archivos **directo** a Blob Storage usando
+una URL firmada (SAS) emitida por la API. Los bytes no pasan por el App
+Service y el access key nunca se expone al cliente.
 
-## 4. Base de datos
+### Recursos
 
-1. Crear **Azure Database for PostgreSQL — Flexible Server**.
-2. Firewall: permitir *Azure services*; para conexión desde local, añadir la IP
-   propia temporalmente.
-3. Crear la BD:
-   ```sql
-   CREATE DATABASE prueba_tecnica;
-   ```
-4. En producción, reemplazar `synchronize: true` por **migraciones TypeORM**
-   (`typeorm migration:generate` / `migration:run`) para evitar cambios de
-   esquema automáticos.
+- **Storage Account** (`StorageV2`, LRS).
+- **Container** privado (ej. `uploads`).
 
-## 5. Storage + SAS para archivos
+### Variables adicionales
 
-### 5.1. Recursos
+| Setting                      | Valor                          |
+|------------------------------|--------------------------------|
+| `AZURE_STORAGE_ACCOUNT`      | nombre de la cuenta            |
+| `AZURE_STORAGE_KEY`          | *(secret)*                     |
+| `AZURE_STORAGE_CONTAINER`    | `uploads`                      |
 
-- Crear **Storage Account** (`StorageV2`, LRS).
-- Dentro, crear un **container** (por ejemplo `uploads`) con acceso **privado**.
-
-### 5.2. Generar un SAS desde la API
-
-Ejemplo de servicio para emitir URLs firmadas de subida (pattern recomendado:
-el cliente sube directo a Blob Storage usando el SAS, sin pasar por la API):
+### Servicio
 
 ```ts
 // src/modules/storage/storage.service.ts
 import {
-  BlobServiceClient,
   StorageSharedKeyCredential,
   generateBlobSASQueryParameters,
   BlobSASPermissions,
@@ -148,30 +92,22 @@ const key       = process.env.AZURE_STORAGE_KEY!;
 const container = process.env.AZURE_STORAGE_CONTAINER!;
 
 const credential = new StorageSharedKeyCredential(account, key);
-const service = new BlobServiceClient(
-  `https://${account}.blob.core.windows.net`,
-  credential
-);
 
 export class StorageService {
-  /** SAS de escritura de 15 min para subir un blob. */
   getUploadSasUrl(blobName: string): string {
     const expiresOn = new Date(Date.now() + 15 * 60 * 1000);
     const sas = generateBlobSASQueryParameters(
       {
         containerName: container,
         blobName,
-        permissions: BlobSASPermissions.parse("cw"), // create + write
+        permissions: BlobSASPermissions.parse("cw"),
         expiresOn,
-        protocol: undefined,
       },
       credential
     ).toString();
-
     return `https://${account}.blob.core.windows.net/${container}/${blobName}?${sas}`;
   }
 
-  /** SAS de lectura de 1 h para descargar un blob. */
   getDownloadSasUrl(blobName: string): string {
     const expiresOn = new Date(Date.now() + 60 * 60 * 1000);
     const sas = generateBlobSASQueryParameters(
@@ -183,48 +119,24 @@ export class StorageService {
       },
       credential
     ).toString();
-
     return `https://${account}.blob.core.windows.net/${container}/${blobName}?${sas}`;
   }
 }
 ```
 
-Endpoint que consume el front:
+### Endpoint
 
 ```ts
-// GET /files/upload-url?name=mi-archivo.png  (protegido con JWT)
+// GET /files/upload-url?name=foto.png  (protegido con JWT)
 router.get("/upload-url", authMiddleware, (req, res) => {
-  const name = String(req.query.name);
-  const url = new StorageService().getUploadSasUrl(name);
+  const url = new StorageService().getUploadSasUrl(String(req.query.name));
   res.json({ url });
 });
 ```
 
-Flujo:
+### Flujo
 
 1. El cliente pide `/files/upload-url?name=foto.png`.
-2. La API devuelve una URL con SAS (válida 15 min, solo escritura).
-3. El cliente hace `PUT` a esa URL con el archivo (ni bytes ni credenciales
-   viajan por la API).
-4. Para descargar, se emite otro SAS de solo lectura.
-
-**Beneficios:**
-- El access key nunca se expone al cliente.
-- SAS con vida corta y permisos mínimos.
-- Se puede revocar rotando la key o usando *stored access policies*.
-
-## 6. Verificación del despliegue
-
-1. Visitar `https://<app>.azurewebsites.net/` — debe devolver el health check.
-2. `GET https://<app>.azurewebsites.net/external-data` — debe devolver los
-   posts transformados.
-3. Revisar logs en App Service → **Log stream**.
-
-## 7. Mejoras sugeridas (producción real)
-
-- Usar **Managed Identity** para que App Service acceda a Storage/Postgres sin
-  compartir claves.
-- Migraciones TypeORM en lugar de `synchronize: true`.
-- **Azure Key Vault** para todos los secretos.
-- **Application Insights** para trazas/errores.
-- Reglas de firewall estrictas en Postgres (solo App Service VNet).
+2. La API devuelve una URL SAS (15 min, solo escritura).
+3. El cliente hace `PUT` a esa URL con el archivo.
+4. Para descargar, la API emite un SAS de solo lectura (1 h).

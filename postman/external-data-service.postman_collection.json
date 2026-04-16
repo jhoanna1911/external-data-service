@@ -1,0 +1,157 @@
+{
+  "info": {
+    "name": "External Data Service",
+    "description": "Colección de pruebas para la API. Usa la variable {{baseUrl}} para cambiar entre local y Azure. El token se guarda automáticamente al hacer login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "b1a2c3d4-e5f6-7890-abcd-111122223333"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://external-data-service-jh-faamgqaheudje0h6.canadacentral-01.azurewebsites.net",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "johanna@test.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Johanna2026!",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": ["{{baseUrl}}"],
+          "path": [""]
+        },
+        "description": "Verifica que la API está viva y lista las rutas disponibles."
+      },
+      "response": []
+    },
+    {
+      "name": "Register — Johanna",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Johanna Alfonso\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "register"]
+        },
+        "description": "Crea el usuario Johanna. Si ya existe, devolverá 400 — es normal, continúa con Login."
+      },
+      "response": []
+    },
+    {
+      "name": "Login — Johanna",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "if (data && data.token) {",
+              "  pm.collectionVariables.set('token', data.token);",
+              "  console.log('Token guardado en la variable {{token}}');",
+              "} else {",
+              "  console.log('No se encontró token en la respuesta');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Autentica y guarda el JWT en la variable de colección {{token}} (ver pestaña Scripts → Post-response)."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /external-data (público)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/external-data",
+          "host": ["{{baseUrl}}"],
+          "path": ["external-data"]
+        },
+        "description": "Consume JSONPlaceholder, transforma los posts (slug + summary) y los retorna. No requiere token."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /external-data/sync (requiere JWT)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            { "key": "token", "value": "{{token}}", "type": "string" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/external-data/sync",
+          "host": ["{{baseUrl}}"],
+          "path": ["external-data", "sync"]
+        },
+        "description": "Descarga los posts de JSONPlaceholder y los guarda en Postgres (Neon). Requiere haber hecho Login primero."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /external-data/stored (requiere JWT)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            { "key": "token", "value": "{{token}}", "type": "string" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/external-data/stored",
+          "host": ["{{baseUrl}}"],
+          "path": ["external-data", "stored"]
+        },
+        "description": "Lista los posts que fueron guardados en la BD con /external-data/sync."
+      },
+      "response": []
+    }
+  ]
+}
