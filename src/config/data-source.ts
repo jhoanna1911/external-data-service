@@ -1,0 +1,19 @@
+import "reflect-metadata";
+import { DataSource } from "typeorm";
+import dotenv from "dotenv";
+import { User } from "../modules/user/user.entity";
+import { Post } from "../modules/external/post.entity";
+
+dotenv.config();
+
+export const AppDataSource = new DataSource({
+  type: "postgres",
+  host: process.env.DB_HOST || "localhost",
+  port: Number(process.env.DB_PORT) || 5432,
+  username: process.env.DB_USERNAME || "postgres",
+  password: process.env.DB_PASSWORD || "postgres",
+  database: process.env.DB_NAME || "prueba_tecnica",
+  synchronize: true, // OJO: solo en desarrollo. En producción usar migraciones.
+  logging: false,
+  entities: [User, Post],
+});
