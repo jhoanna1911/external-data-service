@@ -14,9 +14,6 @@ export class ExternalService {
   private apiUrl =
     process.env.EXTERNAL_API_URL || "https://jsonplaceholder.typicode.com";
 
-  /**
-   * Convierte un título en slug: "Hola Mundo!" -> "hola-mundo"
-   */
   private slugify(text: string): string {
     return text
       .toLowerCase()
@@ -26,17 +23,11 @@ export class ExternalService {
       .replace(/(^-|-$)/g, "");
   }
 
-  /**
-   * Recorta el body a un resumen de máx 80 caracteres.
-   */
   private summarize(body: string, max = 80): string {
     const clean = body.replace(/\n/g, " ").trim();
     return clean.length <= max ? clean : clean.slice(0, max) + "...";
   }
 
-  /**
-   * Consume JSONPlaceholder, transforma los datos y los retorna.
-   */
   async getTransformedPosts() {
     const { data } = await axios.get<JsonPlaceholderPost[]>(
       `${this.apiUrl}/posts`
@@ -53,13 +44,9 @@ export class ExternalService {
     return transformed;
   }
 
-  /**
-   * Igual que el anterior, pero además guarda los resultados en BD.
-   */
   async fetchAndSavePosts() {
     const transformed = await this.getTransformedPosts();
 
-    // Limpia los anteriores para no duplicar
     await this.postRepository.clear();
 
     const entities = transformed.map((p) =>

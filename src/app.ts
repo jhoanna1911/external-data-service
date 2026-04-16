@@ -12,10 +12,9 @@ const app: Application = express();
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get("/", (_req: Request, res: Response) => {
   res.json({
-    message: "API Prueba Técnica funcionando ✅",
+    message: "API funcionando",
     endpoints: {
       health: "GET /",
       register: "POST /auth/register",

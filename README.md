@@ -78,8 +78,8 @@ npm run dev
 Deberías ver:
 
 ```
-✅ Base de datos conectada
-🚀 Servidor corriendo en http://localhost:3000
+Base de datos conectada
+Servidor corriendo en http://localhost:3000
 ```
 
 ### 4. Build y ejecución en producción
